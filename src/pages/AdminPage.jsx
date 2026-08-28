@@ -43,6 +43,9 @@ const HEADER_ALIASES = {
   lastNumber: ['마지막숫자', '마지막 숫자', '금액', 'amount', 'score'],
 };
 
+// 수만 건을 한 요청으로 보내면 Vercel/Supabase 제한으로 500 오류가 날 수 있습니다.
+const UPLOAD_BATCH_SIZE = 500;
+
 function normalizeHeader(value) {
   return String(value ?? '').replace(/\s+/g, '').trim().toLowerCase();
 }
@@ -97,6 +100,23 @@ function rowHasValue(row) {
   return (Array.isArray(row) ? row : []).some(
     (cell) => cell !== '' && cell !== null && cell !== undefined
   );
+}
+
+function isRepeatedHeaderRow(row) {
+  return (
+    normalizeHeader(row[HEADER_KEYS.time]) === normalizeHeader(HEADER_KEYS.time) ||
+    (normalizeHeader(row[HEADER_KEYS.name]) === normalizeHeader(HEADER_KEYS.name) &&
+      normalizeHeader(row[HEADER_KEYS.donation]) ===
+        normalizeHeader(HEADER_KEYS.donation))
+  );
+}
+
+function splitIntoBatches(rows, size) {
+  const batches = [];
+  for (let index = 0; index < rows.length; index += size) {
+    batches.push(rows.slice(index, index + size));
+  }
+  return batches;
 }
 
 function formatRoundLabel(round) {
@@ -174,10 +194,11 @@ function parseWorkbookRows(rows, selectedRound) {
 
   const usefulRows = parsed.filter(
     (row) =>
-      row[HEADER_KEYS.time] ||
-      row[HEADER_KEYS.name] ||
-      row[HEADER_KEYS.donation] ||
-      row[HEADER_KEYS.chat]
+      !isRepeatedHeaderRow(row) &&
+      (row[HEADER_KEYS.time] ||
+        row[HEADER_KEYS.name] ||
+        row[HEADER_KEYS.donation] ||
+        row[HEADER_KEYS.chat])
   );
 
   if (usefulRows.length === 0) {
@@ -294,25 +315,68 @@ export default function AdminPage() {
         message: `${previewData.length.toLocaleString()}건 업로드 중입니다.`,
       });
 
-      const data = previewData.map(({ _row, ...row }) => ({
-        ...row,
-        [HEADER_KEYS.round]: selectedRound,
-      }));
+      const data = previewData
+        .filter((row) => !isRepeatedHeaderRow(row))
+        .map(({ _row, ...row }) => ({
+          ...row,
+          [HEADER_KEYS.round]: selectedRound,
+        }));
 
-      const response = await api.post('/weflab-data', { data });
-      const payload = response.data || {};
-
+      const batches = splitIntoBatches(data, UPLOAD_BATCH_SIZE);
       const uploadResult = {
-        received: Number(payload.received ?? data.length),
-        valid: Number(payload.valid ?? data.length),
-        unique: Number(payload.unique ?? payload.uniqueInRequest ?? data.length),
-        processed: Number(payload.processed ?? 0),
-        inserted: Number(payload.inserted ?? payload.returned ?? 0),
-        skipped: Number(payload.skipped ?? 0),
+        received: 0,
+        valid: 0,
+        unique: 0,
+        processed: 0,
+        inserted: 0,
+        skipped: 0,
       };
+      const allSkippedRows = [];
+
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+        const batch = batches[batchIndex];
+
+        setStatus({
+          type: 'uploading',
+          message: `${batchIndex + 1}/${batches.length} 묶음 업로드 중 · ${uploadResult.inserted.toLocaleString()}건 저장됨`,
+        });
+
+        try {
+          const response = await api.post(
+            '/weflab-data',
+            { data: batch },
+            { timeout: 60000 }
+          );
+          const payload = response.data || {};
+
+          uploadResult.received += Number(payload.received ?? batch.length);
+          uploadResult.valid += Number(payload.valid ?? batch.length);
+          uploadResult.unique += Number(
+            payload.unique ?? payload.uniqueInRequest ?? batch.length
+          );
+          uploadResult.processed += Number(payload.processed ?? 0);
+          uploadResult.inserted += Number(payload.inserted ?? payload.returned ?? 0);
+          uploadResult.skipped += Number(payload.skipped ?? 0);
+
+          if (Array.isArray(payload.skippedRows)) {
+            allSkippedRows.push(...payload.skippedRows);
+          }
+        } catch (batchError) {
+          const serverMessage =
+            batchError?.response?.data?.message ||
+            batchError?.response?.data?.error ||
+            batchError.message ||
+            '서버 오류';
+
+          throw new Error(
+            `${batchIndex + 1}/${batches.length} 묶음에서 실패했습니다. ` +
+              `앞서 저장된 ${uploadResult.inserted.toLocaleString()}건은 유지됩니다. (${serverMessage})`
+          );
+        }
+      }
 
       setResult(uploadResult);
-      setSkippedRows(Array.isArray(payload.skippedRows) ? payload.skippedRows : []);
+      setSkippedRows(allSkippedRows);
       setStatus({
         type: 'success',
         message: `업로드 성공: ${uploadResult.inserted.toLocaleString()}건 저장`,
