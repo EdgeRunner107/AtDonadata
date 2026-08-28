@@ -111,6 +111,11 @@ function isRepeatedHeaderRow(row) {
   );
 }
 
+function hasInvalid1900Time(row) {
+  const time = String(row?.[HEADER_KEYS.time] ?? '').trim();
+  return /^1900(?:[-/.\s]|$)/.test(time);
+}
+
 function splitIntoBatches(rows, size) {
   const batches = [];
   for (let index = 0; index < rows.length; index += size) {
@@ -195,6 +200,7 @@ function parseWorkbookRows(rows, selectedRound) {
   const usefulRows = parsed.filter(
     (row) =>
       !isRepeatedHeaderRow(row) &&
+      !hasInvalid1900Time(row) &&
       (row[HEADER_KEYS.time] ||
         row[HEADER_KEYS.name] ||
         row[HEADER_KEYS.donation] ||
@@ -316,7 +322,7 @@ export default function AdminPage() {
       });
 
       const data = previewData
-        .filter((row) => !isRepeatedHeaderRow(row))
+        .filter((row) => !isRepeatedHeaderRow(row) && !hasInvalid1900Time(row))
         .map(({ _row, ...row }) => ({
           ...row,
           [HEADER_KEYS.round]: selectedRound,
