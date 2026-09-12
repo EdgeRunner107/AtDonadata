@@ -211,7 +211,7 @@ export default function ViewerPage() {
       <div className="viewer-container mobile">
         <header className="viewer-header">
           <div>
-            <div className="viewer-eyebrow">ARTs DATA</div>
+            <div className="viewer-eyebrow">ARTz DATA</div>
             <h1>회차 / 멤버 데이터 조회</h1>
           </div>
 
