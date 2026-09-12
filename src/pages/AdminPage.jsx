@@ -12,16 +12,16 @@ import {
 import { api, API_BASE_URL } from '../api.js';
 
 const ROUND_OPTIONS = [
-  'ARTS1회차',
-  'ARTS2회차',
-  'ARTS3회차',
-  'ARTS4회차',
-  'ARTS5회차',
-  'ARTS6회차',
-  'ARTS7회차',
-  'ARTS8회차',
-  'ARTS9회차',
-  'ARTS10회차',
+  'ARTz1회차',
+  'ARTz2회차',
+  'ARTz3회차',
+  'ARTz4회차',
+  'ARTz5회차',
+  'ARTz6회차',
+  'ARTz7회차',
+  'ARTz8회차',
+  'ARTz9회차',
+  'ARTz10회차',
 ];
 
 const HEADER_KEYS = {
