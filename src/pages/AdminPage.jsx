@@ -22,6 +22,16 @@ const ROUND_OPTIONS = [
   'ARTz8회차',
   'ARTz9회차',
   'ARTz10회차',
+  'ARTz11회차',
+  'ARTz12회차',
+  'ARTz13회차',
+  'ARTz14회차',
+  'ARTz15회차',
+  'ARTz16회차',
+  'ARTz17회차',
+  'ARTz18회차',
+  'ARTz19회차',
+  'ARTz20회차',
 ];
 
 const HEADER_KEYS = {
